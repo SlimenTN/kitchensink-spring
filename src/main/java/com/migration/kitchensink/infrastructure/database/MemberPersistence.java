@@ -20,6 +20,19 @@ public class MemberPersistence {
 		return memberRepository.findById(id).map(MemberPersistence::toMember);
 	}
 
+	// Upsert by _id: inserts a new member or replaces the existing one
+	public void save(Member member) {
+		memberRepository.save(toDocument(member));
+	}
+
+	public void deleteById(long id) {
+		memberRepository.deleteById(id);
+	}
+
+	private static MemberDocument toDocument(Member member) {
+		return new MemberDocument(member.id(), member.name(), member.email(), member.phoneNumber());
+	}
+
 	private static Member toMember(MemberDocument document) {
 		return new Member(document.id(), document.name(), document.email(), document.phoneNumber());
 	}

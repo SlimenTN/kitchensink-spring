@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
 // GET /rest/members/{id} through every layer: HTTP -> rest -> domaine -> database -> MongoDB
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+@SpringBootTest(webEnvironment = RANDOM_PORT, properties = "migration.cdc.enabled=false")
 @Import(TestcontainersConfiguration.class)
 class MemberApiIntegrationTest {
 

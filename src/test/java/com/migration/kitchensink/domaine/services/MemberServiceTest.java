@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest {
@@ -38,6 +39,22 @@ class MemberServiceTest {
 
 		assertThatThrownBy(() -> memberService.findById(99L)).isInstanceOf(MemberNotFoundException.class)
 			.hasMessageContaining("99");
+	}
+
+	@Test
+	void synchronizeStoresTheMember() {
+		Member member = new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234");
+
+		memberService.synchronize(member);
+
+		then(memberPersistence).should().save(member);
+	}
+
+	@Test
+	void removeDeletesTheMember() {
+		memberService.remove(1L);
+
+		then(memberPersistence).should().deleteById(1L);
 	}
 
 }
