@@ -43,3 +43,6 @@ build/
 ### Logs (e.g. Tomcat access log from --server.tomcat.accesslog.directory=$PWD/logs) ###
 logs/
 *.log
+
+### CDC state (Debezium offsets and schema history) ###
+/data/

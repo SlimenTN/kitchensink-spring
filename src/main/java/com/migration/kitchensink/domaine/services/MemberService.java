@@ -22,4 +22,18 @@ public class MemberService {
 		return memberPersistence.findById(id).orElseThrow(() -> new MemberNotFoundException(id));
 	}
 
+	/**
+	 * Stores the member as it exists in the legacy system (created, updated or snapshotted).
+	 */
+	public void synchronize(Member member) {
+		memberPersistence.save(member);
+	}
+
+	/**
+	 * Removes a member deleted from the legacy system; unknown ids are ignored.
+	 */
+	public void remove(long id) {
+		memberPersistence.deleteById(id);
+	}
+
 }
