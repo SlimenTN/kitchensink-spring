@@ -1,6 +1,8 @@
 package com.migration.kitchensink.domaine.services;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -30,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest {
@@ -123,6 +127,77 @@ class MemberServiceTest {
 
 		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Someone Else", "john.smith@mailinator.com", "2125551234")))
 			.isInstanceOf(EmailAlreadyTakenException.class);
+	}
+
+	// the members page passes the browser language; messages captured from the legacy page with Accept-Language: fr
+	@Test
+	void registerWithALanguageGivesTheValidationMessagesInThatLanguage() {
+		NewMember member = new NewMember(null, "Bad 123", "not-an-email", "12");
+
+		assertThatThrownBy(() -> memberService.register(member, Locale.FRENCH))
+			.isInstanceOfSatisfying(MemberValidationException.class,
+					exception -> assertThat(exception.violations()).containsOnly(
+							entry("name", "ne doit contenir que des lettres et des espaces"),
+							entry("email", "doit être une adresse électronique syntaxiquement correcte"),
+							entry("phoneNumber", "la taille doit être comprise entre 10 et 12")));
+		then(memberPersistence).shouldHaveNoInteractions();
+	}
+
+	@Test
+	void registerWithALanguageStoresAValidMemberLikeRegister() {
+		NewMember jane = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
+		Member stored = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
+		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
+		given(memberPersistence.create(jane)).willReturn(stored);
+
+		assertThat(memberService.register(jane, Locale.FRENCH)).isEqualTo(stored);
+	}
+
+	@Test
+	void registerWithALanguageRejectsAnEmailAlreadyTaken() {
+		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+
+		assertThatThrownBy(() -> memberService
+			.register(new NewMember(null, "Someone Else", "john.smith@mailinator.com", "2125551234"), Locale.FRENCH))
+			.isInstanceOf(EmailAlreadyTakenException.class);
+		then(memberPersistence).should(never()).create(any());
+	}
+
+	/**
+	 * A field breaking several rules gets one message: the first rule in the order written on the entity. Same as the
+	 * legacy page for empty and non-numeric phones (captured live). Known difference: legacy's pick comes from
+	 * Bean Validation's unordered result, so for a name both too long and with digits it shows the pattern message,
+	 * and for a phone with 13 digits the digits message.
+	 */
+	@ParameterizedTest(name = "{0}")
+	@CsvSource(delimiter = '|', value = {
+			"empty phone (size + digits)            | Jane Doe                     | ''            | phoneNumber | size must be between 10 and 12",
+			"non-numeric phone (size + digits)      | Jane Doe                     | 12a           | phoneNumber | size must be between 10 and 12",
+			"too long name with digits (size + pattern) | Abcdefghijklmnopqrstuvwxyz 1 | 2125551234 | name        | size must be between 1 and 25" })
+	void aFieldBreakingSeveralRulesReportsTheFirstRule(String scenario, String name, String phoneNumber, String field,
+			String message) {
+		assertThatThrownBy(() -> memberService.register(new NewMember(null, name, "a@example.com", phoneNumber),
+				Locale.ENGLISH))
+			.isInstanceOfSatisfying(MemberValidationException.class,
+					exception -> assertThat(exception.violations()).containsExactly(entry(field, message)));
+	}
+
+	@Test
+	void awaitReadableReturnsOnceCdcHasCopiedTheMember() {
+		Member jane = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
+		given(memberPersistence.findById(201L)).willReturn(Optional.empty(), Optional.empty(), Optional.of(jane));
+
+		assertThat(memberService.awaitReadable(201L, Duration.ofSeconds(5))).isTrue();
+		then(memberPersistence).should(times(3)).findById(201L);
+	}
+
+	@Test
+	void awaitReadableGivesUpAfterTheTimeout() {
+		given(memberPersistence.findById(201L)).willReturn(Optional.empty());
+		long start = System.nanoTime();
+
+		assertThat(memberService.awaitReadable(201L, Duration.ofMillis(300))).isFalse();
+		assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
 	}
 
 	@Test
