@@ -2,29 +2,128 @@ package com.migration.kitchensink.domaine.services;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
+import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
+import com.migration.kitchensink.domaine.exceptions.MemberIdNotAllowedException;
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
+import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.database.MemberPersistence;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest {
 
+	// real Bean Validation: the field rules and their messages are part of what the domain must get right
+	private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
+
 	@Mock
 	private MemberPersistence memberPersistence;
 
-	@InjectMocks
 	private MemberService memberService;
+
+	@BeforeEach
+	void setUp() {
+		memberService = new MemberService(memberPersistence, VALIDATOR);
+	}
+
+	@Test
+	void registerCreatesAValidMemberThroughThePersistenceAndReturnsIt() {
+		NewMember jane = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
+		Member stored = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
+		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
+		given(memberPersistence.create(jane)).willReturn(stored);
+
+		assertThat(memberService.register(jane)).isEqualTo(stored);
+		// registration goes through create(); MongoDB is only updated by CDC (synchronize)
+		then(memberPersistence).should(never()).synchronize(any());
+	}
+
+	@ParameterizedTest(name = "{0}")
+	@MethodSource("invalidMembers")
+	void registerRejectsAnInvalidMemberWithTheLegacyMessage(String scenario, NewMember member, String field,
+			String message) {
+		assertThatThrownBy(() -> memberService.register(member)).isInstanceOfSatisfying(MemberValidationException.class,
+				exception -> assertThat(exception.violations()).containsExactly(entry(field, message)));
+		then(memberPersistence).shouldHaveNoInteractions();
+	}
+
+	static Stream<Arguments> invalidMembers() {
+		return Stream.of(
+				arguments("name with digits", new NewMember(null, "Bad 123", "a@example.com", "2125551234"), "name",
+						"must contain only letters and spaces"),
+				arguments("name too long", new NewMember(null, "Abcdefghijklmnopqrstuvwxyz", "a@example.com", "2125551234"),
+						"name", "size must be between 1 and 25"),
+				arguments("name missing", new NewMember(null, null, "a@example.com", "2125551234"), "name",
+						"must not be null"),
+				arguments("invalid email", new NewMember(null, "Jane Doe", "not-an-email", "2125551234"), "email",
+						"must be a well-formed email address"),
+				arguments("phone too short", new NewMember(null, "Jane Doe", "a@example.com", "12345"), "phoneNumber",
+						"size must be between 10 and 12"));
+	}
+
+	@Test
+	void registerReportsOneMessagePerInvalidField() {
+		NewMember member = new NewMember(null, "Bad 123", "not-an-email", "12345");
+
+		assertThatThrownBy(() -> memberService.register(member)).isInstanceOfSatisfying(MemberValidationException.class,
+				exception -> assertThat(exception.violations()).containsOnlyKeys("name", "email", "phoneNumber"));
+	}
+
+	@Test
+	void registerRejectsAnEmailAlreadyTaken() {
+		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+
+		assertThatThrownBy(() -> memberService
+			.register(new NewMember(null, "Someone Else", "john.smith@mailinator.com", "2125551234")))
+			.isInstanceOf(EmailAlreadyTakenException.class);
+		then(memberPersistence).should(never()).create(any());
+	}
+
+	@Test
+	void registerRejectsAMemberThatAlreadyHasAnId() {
+		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
+
+		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Jane Doe", "jane.doe@example.com", "2125551234")))
+			.isInstanceOf(MemberIdNotAllowedException.class);
+		then(memberPersistence).should(never()).create(any());
+	}
+
+	// legacy order: field rules, then email uniqueness, then the id
+	@Test
+	void fieldRulesAreCheckedBeforeEmailUniquenessAndId() {
+		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Bad 123", "john.smith@mailinator.com", "2125551234")))
+			.isInstanceOf(MemberValidationException.class);
+		then(memberPersistence).shouldHaveNoInteractions();
+	}
+
+	@Test
+	void emailUniquenessIsCheckedBeforeTheId() {
+		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+
+		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Someone Else", "john.smith@mailinator.com", "2125551234")))
+			.isInstanceOf(EmailAlreadyTakenException.class);
+	}
 
 	@Test
 	void findByIdReturnsTheMember() {
@@ -64,7 +163,7 @@ class MemberServiceTest {
 
 		memberService.synchronize(member);
 
-		then(memberPersistence).should().save(member);
+		then(memberPersistence).should().synchronize(member);
 	}
 
 	@Test
