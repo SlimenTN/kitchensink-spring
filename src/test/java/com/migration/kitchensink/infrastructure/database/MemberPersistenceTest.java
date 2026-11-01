@@ -3,6 +3,7 @@ package com.migration.kitchensink.infrastructure.database;
 import java.util.List;
 import java.util.Optional;
 
+import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
@@ -14,8 +15,11 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.dao.DuplicateKeyException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
@@ -30,12 +34,19 @@ class MemberPersistenceTest {
 	@Mock
 	private LegacyMemberPersistence legacyRepository;
 
+	@Mock
+	private MemberIdSequence idSequence;
+
 	// write store "legacy", as configured during the migration
 	private MemberPersistence memberPersistence;
 
 	@BeforeEach
 	void setUp() {
-		memberPersistence = new MemberPersistence(memberRepository, legacyRepository, "legacy");
+		memberPersistence = new MemberPersistence(memberRepository, legacyRepository, idSequence, "legacy");
+	}
+
+	private MemberPersistence onNewWriteStore() {
+		return new MemberPersistence(memberRepository, legacyRepository, idSequence, "new");
 	}
 
 	@Test
@@ -56,20 +67,38 @@ class MemberPersistenceTest {
 	}
 
 	@Test
-	void newWriteStoreIsNotAvailableYet() {
-		MemberPersistence onNewStore = new MemberPersistence(memberRepository, legacyRepository, "new");
+	void newWriteStoreCreatesTheMemberInMongoDbWithAnIdFromTheSequence() {
+		given(idSequence.next()).willReturn(1_000_007L);
 
-		assertThatThrownBy(() -> onNewStore.create(JANE)).isInstanceOf(IllegalStateException.class)
-			.hasMessageContaining("not available yet");
-		assertThatThrownBy(() -> onNewStore.existsByEmail("jane.doe@example.com"))
-			.isInstanceOf(IllegalStateException.class);
+		assertThat(onNewWriteStore().create(JANE))
+			.isEqualTo(new Member(1_000_007L, "Jane Doe", "jane.doe@example.com", "2125551234"));
+		// insert, never save: an existing member must not be replaced
+		then(memberRepository).should()
+			.insert(new MemberDocument(1_000_007L, "Jane Doe", "jane.doe@example.com", "2125551234"));
 		then(legacyRepository).shouldHaveNoInteractions();
-		then(memberRepository).shouldHaveNoInteractions();
+	}
+
+	@Test
+	void newWriteStoreChecksTheEmailInMongoDb() {
+		given(memberRepository.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+
+		assertThat(onNewWriteStore().existsByEmail("john.smith@mailinator.com")).isTrue();
+		then(legacyRepository).shouldHaveNoInteractions();
+	}
+
+	// two registrations with the same email at the same moment: the unique email index rejects the second
+	@Test
+	void newWriteStoreTurnsADuplicateEmailIntoEmailAlreadyTaken() {
+		given(idSequence.next()).willReturn(1_000_008L);
+		given(memberRepository.insert(any(MemberDocument.class)))
+			.willThrow(new DuplicateKeyException("E11000 duplicate key error collection: kitchensink.members index: uk_members_email"));
+
+		assertThatThrownBy(() -> onNewWriteStore().create(JANE)).isInstanceOf(EmailAlreadyTakenException.class);
 	}
 
 	@Test
 	void unknownWriteStoreIsRejectedAtStartup() {
-		assertThatThrownBy(() -> new MemberPersistence(memberRepository, legacyRepository, "legasy"))
+		assertThatThrownBy(() -> new MemberPersistence(memberRepository, legacyRepository, idSequence, "legasy"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("'legacy' or 'new'")
 			.hasMessageContaining("legasy");
@@ -79,7 +108,8 @@ class MemberPersistenceTest {
 	@ParameterizedTest
 	@ValueSource(strings = { "legacy", "new" })
 	void readsAndSynchronizationAlwaysUseMongoDb(String writeStore) {
-		MemberPersistence persistence = new MemberPersistence(memberRepository, legacyRepository, writeStore);
+		MemberPersistence persistence = new MemberPersistence(memberRepository, legacyRepository, idSequence,
+				writeStore);
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
 		persistence.findById(1L);

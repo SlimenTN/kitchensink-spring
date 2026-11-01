@@ -11,4 +11,8 @@ public interface MemberRepository extends MongoRepository<MemberDocument, Long> 
 	@Collation("{ 'locale' : 'en', 'strength' : 1 }")
 	List<MemberDocument> findAllByOrderByNameAsc();
 
+	// Same comparison as the legacy MySQL email check and unique key: case- and accent-insensitive
+	@Collation("{ 'locale' : 'en', 'strength' : 1 }")
+	boolean existsByEmail(String email);
+
 }
