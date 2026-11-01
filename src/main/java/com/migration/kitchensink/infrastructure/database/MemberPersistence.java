@@ -3,11 +3,13 @@ package com.migration.kitchensink.infrastructure.database;
 import java.util.List;
 import java.util.Optional;
 
+import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,7 +17,8 @@ import org.springframework.stereotype.Component;
  *
  * Reads and CDC synchronization always use MongoDB (memberRepository). Registrations (create, email check) go to
  * the database selected by migration.write-store: "legacy" = the legacy MySQL database, source of truth during the
- * migration (CDC copies new members to MongoDB); "new" = MongoDB, once all write traffic is on the new system.
+ * migration (CDC copies new members to MongoDB); "new" = MongoDB, once all write traffic is on the new system (ids from
+ * MemberIdSequence: biggest id + 1, case- and accent-insensitive unique email like MySQL).
  */
 @Component
 public class MemberPersistence {
@@ -28,11 +31,14 @@ public class MemberPersistence {
 
 	private final LegacyMemberPersistence legacyRepository;
 
+	private final MemberIdSequence idSequence;
+
 	private final String writeStore;
 
 	public MemberPersistence(
 			final MemberRepository memberRepository,
 			final LegacyMemberPersistence legacyRepository,
+			final MemberIdSequence idSequence,
 			final @Value("${migration.write-store}") String writeStore) {
 
 		if (!LEGACY.equals(writeStore) && !NEW.equals(writeStore)) {
@@ -41,6 +47,7 @@ public class MemberPersistence {
 		}
 		this.memberRepository = memberRepository;
 		this.legacyRepository = legacyRepository;
+		this.idSequence = idSequence;
 		this.writeStore = writeStore;
 	}
 
@@ -58,18 +65,33 @@ public class MemberPersistence {
 		if (LEGACY.equals(writeStore)) {
 			return legacyRepository.existsByEmail(email);
 		}
-		throw newWriteStoreNotAvailable();
+		return memberRepository.existsByEmail(email);
 	}
 
 	/**
 	 * Registers a new member in the write store.
 	 * @return the stored member, with its id
+	 * @throws EmailAlreadyTakenException (write store "new") when the email was registered at the same moment: the
+	 * unique email index rejects the second member
 	 */
 	public Member create(NewMember member) {
 		if (LEGACY.equals(writeStore)) {
 			return legacyRepository.insert(member);
 		}
-		throw newWriteStoreNotAvailable();
+		MemberDocument document = new MemberDocument(
+				idSequence.next(),
+				member.name(),
+				member.email(),
+				member.phoneNumber()
+		);
+		try {
+			// insert, not save: never replaces an existing member
+			memberRepository.insert(document);
+		}
+		catch (DuplicateKeyException exception) {
+			throw new EmailAlreadyTakenException(member.email());
+		}
+		return toMember(document);
 	}
 
 	// CDC: stores the member as it exists in the legacy database (upsert by _id); always MongoDB
@@ -80,12 +102,6 @@ public class MemberPersistence {
 	// CDC: always MongoDB
 	public void deleteById(long id) {
 		memberRepository.deleteById(id);
-	}
-
-	// writing to MongoDB first needs its own id counter (started far above Member_SEQ) and a case-insensitive
-	// unique index on email
-	private static IllegalStateException newWriteStoreNotAvailable() {
-		return new IllegalStateException("migration.write-store '" + NEW + "' is not available yet");
 	}
 
 	private static MemberDocument toDocument(Member member) {
