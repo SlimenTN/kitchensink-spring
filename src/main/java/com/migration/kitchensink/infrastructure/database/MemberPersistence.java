@@ -1,5 +1,6 @@
 package com.migration.kitchensink.infrastructure.database;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.migration.kitchensink.domaine.models.Member;
@@ -18,6 +19,11 @@ public class MemberPersistence {
 
 	public Optional<Member> findById(long id) {
 		return memberRepository.findById(id).map(MemberPersistence::toMember);
+	}
+
+	// Sorted like the legacy list: by name, ignoring case and accents
+	public List<Member> findAllOrderedByName() {
+		return memberRepository.findAllByOrderByNameAsc().stream().map(MemberPersistence::toMember).toList();
 	}
 
 	// Upsert by _id: inserts a new member or replaces the existing one

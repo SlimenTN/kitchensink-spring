@@ -1,5 +1,6 @@
 package com.migration.kitchensink.domaine.services;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
@@ -39,6 +40,22 @@ class MemberServiceTest {
 
 		assertThatThrownBy(() -> memberService.findById(99L)).isInstanceOf(MemberNotFoundException.class)
 			.hasMessageContaining("99");
+	}
+
+	@Test
+	void findAllOrderedByNameReturnsTheMembersInPersistenceOrder() {
+		List<Member> members = List.of(new Member(2L, "alice", "alice@example.com", "2125550001"),
+				new Member(1L, "Bob", "bob@example.com", "2125550002"));
+		given(memberPersistence.findAllOrderedByName()).willReturn(members);
+
+		assertThat(memberService.findAllOrderedByName()).containsExactlyElementsOf(members);
+	}
+
+	@Test
+	void findAllOrderedByNameReturnsAnEmptyListWhenThereAreNoMembers() {
+		given(memberPersistence.findAllOrderedByName()).willReturn(List.of());
+
+		assertThat(memberService.findAllOrderedByName()).isEmpty();
 	}
 
 	@Test
