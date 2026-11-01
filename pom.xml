@@ -105,6 +105,13 @@
 			<artifactId>testcontainers-mysql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- HTML parsing in the members page tests -->
+		<dependency>
+			<groupId>org.jsoup</groupId>
+			<artifactId>jsoup</artifactId>
+			<version>1.23.2</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

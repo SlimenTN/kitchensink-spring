@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<!--
+    JBoss, Home of Professional Open Source
+    Copyright 2015, Red Hat, Inc. and/or its affiliates, and individual
+    contributors by the @authors tag. See the copyright.txt in the
+    distribution for a full listing of individual contributors.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+--><html xmlns="http://www.w3.org/1999/xhtml"><head><!--/* Copy of the HTML rendered by the legacy JSF page
+    (index.xhtml + WEB-INF/templates/default.xhtml): same markup, layout, field names and texts, links to the public
+    paths behind the gateway (/kitchensink/...). Even whitespace matters: the parity tests compare both pages. */-->
+    <title>kitchensink</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><link rel="stylesheet" href="/kitchensink/resources/css/screen.css" /></head><body>
+    <div id="container">
+        <div class="dualbrand">
+            <img src="resources/gfx/rhjb_eap_logo.png" width="300" height="175" />
+        </div>
+        <div id="content">
+        <h1 th:text="#{memberWelcomeHeader}">Welcome to JBoss!</h1>
+
+        <div>
+            <p th:text="#{memberWelcomeMessage}">You have successfully deployed a localized Jakarta EE web application.</p>
+        </div>
+<form id="reg" name="reg" method="post" action="/kitchensink/index.jsf" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="reg" value="reg" />
+            <h2 th:text="#{memberRegistrationHeader}">Member Registration</h2>
+            <p th:text="#{memberFormDescription}">Enforces annotation-based constraints defined on the model class.</p><table>
+<tbody>
+<tr>
+<td class="titleCell"><label for="reg:name" th:text="#{memberNameLabel}">Name:</label></td>
+<td><input id="reg:name" type="text" name="reg:name" value="" th:value="${form.name}" /></td>
+<td><span class="invalid" th:if="${fieldErrors['name']}" th:text="${fieldErrors['name']}"></span></td>
+</tr>
+<tr>
+<td class="titleCell"><label for="reg:email" th:text="#{memberEmailLabel}">Email:</label></td>
+<td><input id="reg:email" type="text" name="reg:email" value="" th:value="${form.email}" /></td>
+<td><span class="invalid" th:if="${fieldErrors['email']}" th:text="${fieldErrors['email']}"></span></td>
+</tr>
+<tr>
+<td class="titleCell"><label for="reg:phoneNumber" th:text="#{memberPhoneLabel}">Phone #:</label></td>
+<td><input id="reg:phoneNumber" type="text" name="reg:phoneNumber" value="" th:value="${form.phoneNumber}" /></td>
+<td><span class="invalid" th:if="${fieldErrors['phoneNumber']}" th:text="${fieldErrors['phoneNumber']}"></span></td>
+</tr>
+</tbody>
+</table>
+
+
+            <p><table>
+<tbody>
+<tr>
+<td><input id="reg:register" type="submit" name="reg:register" value="Register" class="register" th:value="#{memberRegisterButtonLabel}" /></td>
+<td><ul class="messages" th:if="${registered or !#strings.isEmpty(errorMessage)}"><li class="valid" th:if="${registered}">	[[#{registeredMessage}]] </li><li class="invalid" th:if="${!#strings.isEmpty(errorMessage)}">	[[${errorMessage}]] </li></ul></td>
+</tr>
+</tbody>
+</table>
+
+            </p>
+</form>
+        <h2 th:text="#{membersHeader}">Members</h2><th:block th:if="${#lists.isEmpty(members)}">
+            <em>No registered members.</em>
+        </th:block><table class="simpletablestyle" th:unless="${#lists.isEmpty(members)}">
+<thead>
+<tr>
+<th scope="col" th:text="#{memberIdHeader}">ID</th>
+<th scope="col" th:text="#{memberNameHeader}">Name</th>
+<th scope="col" th:text="#{memberEmailHeader}">Email</th>
+<th scope="col" th:text="#{memberPhoneHeader}">Phone #</th>
+<th scope="col" th:text="#{memberRestUrl}">REST URL</th>
+</tr>
+</thead>
+<tfoot>
+<tr><td colspan="5">[[#{memberRestUrlAllLabel}]]<a href="/kitchensink/rest/members">/rest/members</a></td></tr>
+</tfoot>
+<tbody>
+<tr th:each="member : ${members}">
+<td>
+                    [[${member.id}]]
+            </td>
+<td>
+                    [[${member.name}]]
+            </td>
+<td>
+                    [[${member.email}]]
+            </td>
+<td>
+                    [[${member.phoneNumber}]]
+            </td>
+<td>
+                <a th:href="|/kitchensink/rest/members/${member.id}|" th:text="|/rest/members/${member.id}|">/rest/members/0</a></td>
+</tr>
+</tbody>
+</table>
+
+        </div>
+        <div id="aside">
+            <p>Learn more about Red Hat JBoss Enterprise Application Platform.</p>
+            <ul>
+                <li><a href="https://access.redhat.com/documentation/en/red-hat-jboss-enterprise-application-platform/">Documentation</a></li>
+                <li><a href="http://www.redhat.com/en/technologies/jboss-middleware/application-platform">Product Information</a></li>
+            </ul>
+        </div>
+        <div id="footer">
+            <p>
+                This project was generated from a Maven archetype from
+                JBoss.<br />
+            </p>
+        </div>
+    </div></body>
+</html>
