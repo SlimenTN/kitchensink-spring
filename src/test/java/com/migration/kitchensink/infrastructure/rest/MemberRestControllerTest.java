@@ -1,5 +1,7 @@
 package com.migration.kitchensink.infrastructure.rest;
 
+import java.util.List;
+
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.services.MemberService;
@@ -28,6 +30,34 @@ class MemberRestControllerTest {
 
 	@MockitoBean
 	private MemberService memberService;
+
+	@Test
+	void listsAllMembersInServiceOrderWithTheLegacyJsonContract() throws Exception {
+		given(memberService.findAllOrderedByName())
+			.willReturn(List.of(new Member(2L, "alice", "alice@example.com", "2125550001"),
+					new Member(1L, "Bob", "bob@example.com", "2125550002")));
+
+		mockMvc.perform(get("/rest/members").accept(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			// STRICT: same fields and types, and the array order is checked too
+			.andExpect(content().json("""
+					[
+					  {"email": "alice@example.com", "id": 2, "name": "alice", "phoneNumber": "2125550001"},
+					  {"email": "bob@example.com", "id": 1, "name": "Bob", "phoneNumber": "2125550002"}
+					]
+					""", JsonCompareMode.STRICT));
+	}
+
+	@Test
+	void listsAnEmptyArrayWhenThereAreNoMembers() throws Exception {
+		given(memberService.findAllOrderedByName()).willReturn(List.of());
+
+		mockMvc.perform(get("/rest/members").accept(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk())
+			.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(content().json("[]", JsonCompareMode.STRICT));
+	}
 
 	@Test
 	void returnsTheMemberWithJsonContract() throws Exception {

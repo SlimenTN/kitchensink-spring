@@ -1,5 +1,6 @@
 package com.migration.kitchensink.infrastructure.database;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.migration.kitchensink.domaine.models.Member;
@@ -36,6 +37,24 @@ class MemberPersistenceTest {
 		given(memberRepository.findById(99L)).willReturn(Optional.empty());
 
 		assertThat(memberPersistence.findById(99L)).isEmpty();
+	}
+
+	@Test
+	void findAllOrderedByNameMapsEveryDocumentAndKeepsTheRepositoryOrder() {
+		given(memberRepository.findAllByOrderByNameAsc())
+			.willReturn(List.of(new MemberDocument(2L, "alice", "alice@example.com", "2125550001"),
+					new MemberDocument(1L, "Bob", "bob@example.com", "2125550002")));
+
+		assertThat(memberPersistence.findAllOrderedByName()).containsExactly(
+				new Member(2L, "alice", "alice@example.com", "2125550001"),
+				new Member(1L, "Bob", "bob@example.com", "2125550002"));
+	}
+
+	@Test
+	void findAllOrderedByNameReturnsAnEmptyListWhenNoDocument() {
+		given(memberRepository.findAllByOrderByNameAsc()).willReturn(List.of());
+
+		assertThat(memberPersistence.findAllOrderedByName()).isEmpty();
 	}
 
 	@Test

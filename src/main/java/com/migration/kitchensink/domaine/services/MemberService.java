@@ -1,5 +1,7 @@
 package com.migration.kitchensink.domaine.services;
 
+import java.util.List;
+
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.infrastructure.database.MemberPersistence;
@@ -20,6 +22,13 @@ public class MemberService {
 	 */
 	public Member findById(long id) {
 		return memberPersistence.findById(id).orElseThrow(() -> new MemberNotFoundException(id));
+	}
+
+	/**
+	 * All members, sorted by name like the legacy list (case- and accent-insensitive).
+	 */
+	public List<Member> findAllOrderedByName() {
+		return memberPersistence.findAllOrderedByName();
 	}
 
 	/**
