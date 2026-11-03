@@ -10,7 +10,6 @@ import com.migration.kitchensink.domaine.exceptions.MemberIdNotAllowedException;
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
-import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import jakarta.validation.Validation;
@@ -58,8 +57,6 @@ class MemberServiceTest {
 		given(memberPersistence.create(jane)).willReturn(stored);
 
 		assertThat(memberService.register(jane)).isEqualTo(stored);
-		// registration goes through create(); MongoDB is only updated by CDC (synchronize)
-		then(memberPersistence).should(never()).synchronize(any());
 	}
 
 	@ParameterizedTest(name = "{0}")
@@ -219,17 +216,6 @@ class MemberServiceTest {
 		given(memberPersistence.findAllOrderedByName()).willReturn(List.of());
 
 		assertThat(memberService.findAllOrderedByName()).isEmpty();
-	}
-
-	@Test
-	void synchronizeAppliesTheLegacyChanges() {
-		List<MemberChange> changes = List.of(
-				new MemberChange.Upsert(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234")),
-				new MemberChange.Removal(2L));
-
-		memberService.synchronize(changes);
-
-		then(memberPersistence).should().synchronize(changes);
 	}
 
 }

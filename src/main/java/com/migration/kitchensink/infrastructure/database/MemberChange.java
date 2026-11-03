@@ -1,7 +1,9 @@
-package com.migration.kitchensink.domaine.models;
+package com.migration.kitchensink.infrastructure.database;
+
+import com.migration.kitchensink.domaine.models.Member;
 
 /**
- * A change of a member in the legacy database, to apply to the new system (CDC).
+ * A change of a member in the legacy database, to apply to MongoDB (CDC). Migration only: not a domain concept.
  */
 public sealed interface MemberChange {
 

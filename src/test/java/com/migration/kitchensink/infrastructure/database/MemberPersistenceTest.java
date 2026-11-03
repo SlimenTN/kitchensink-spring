@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
-import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
 import org.junit.jupiter.api.BeforeEach;

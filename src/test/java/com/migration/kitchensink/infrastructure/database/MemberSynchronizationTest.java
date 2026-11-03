@@ -6,7 +6,6 @@ import java.util.stream.LongStream;
 
 import com.migration.kitchensink.TestcontainersConfiguration;
 import com.migration.kitchensink.domaine.models.Member;
-import com.migration.kitchensink.domaine.models.MemberChange;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

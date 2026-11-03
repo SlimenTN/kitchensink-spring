@@ -3,7 +3,6 @@ package com.migration.kitchensink.infrastructure.database;
 import java.util.List;
 
 import com.migration.kitchensink.domaine.models.Member;
-import com.migration.kitchensink.domaine.models.MemberChange;
 
 import org.springframework.data.mongodb.core.BulkOperations;
 import org.springframework.data.mongodb.core.BulkOperations.BulkMode;

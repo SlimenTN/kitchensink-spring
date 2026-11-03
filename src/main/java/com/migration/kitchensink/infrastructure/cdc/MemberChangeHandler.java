@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Optional;
 
 import com.migration.kitchensink.domaine.models.Member;
-import com.migration.kitchensink.domaine.models.MemberChange;
-import com.migration.kitchensink.domaine.services.MemberService;
+import com.migration.kitchensink.infrastructure.database.MemberChange;
+import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -15,7 +15,8 @@ import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 
 /**
- * Applies Debezium change events of the legacy Member table to the domain, one batch at a time.
+ * Applies Debezium change events of the legacy Member table to MongoDB, one batch at a time. Writes straight through
+ * the persistence layer: copying legacy data is a migration concern, not a domain operation.
  *
  * Event value (JSON, without schema):
  * {"before": {...} | null, "after": {...} | null, "op": "c" | "u" | "d" | "r"}
@@ -26,17 +27,17 @@ public class MemberChangeHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(MemberChangeHandler.class);
 
-	private final MemberService memberService;
+	private final MemberPersistence memberPersistence;
 
 	private final JsonMapper jsonMapper;
 
-	public MemberChangeHandler(MemberService memberService, JsonMapper jsonMapper) {
-		this.memberService = memberService;
+	public MemberChangeHandler(MemberPersistence memberPersistence, JsonMapper jsonMapper) {
+		this.memberPersistence = memberPersistence;
 		this.jsonMapper = jsonMapper;
 	}
 
 	/**
-	 * Applies a batch of change events, in their order, with one write to the domain.
+	 * Applies a batch of change events, in their order, with one write.
 	 * @param eventValues the change event values; {@code null} for tombstones, which are ignored
 	 */
 	public void handle(List<String> eventValues) {
@@ -45,7 +46,7 @@ public class MemberChangeHandler {
 			toChange(eventValue).ifPresent(changes::add);
 		}
 		if (!changes.isEmpty()) {
-			memberService.synchronize(changes);
+			memberPersistence.synchronize(changes);
 		}
 	}
 
