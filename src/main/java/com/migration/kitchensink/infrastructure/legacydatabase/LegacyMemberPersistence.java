@@ -1,5 +1,7 @@
 package com.migration.kitchensink.infrastructure.legacydatabase;
 
+import java.util.List;
+
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
 
@@ -9,7 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Writes members into the legacy MySQL database, the source of truth during the migration (CDC copies them to
- * MongoDB). The schema belongs to the legacy app (Hibernate): this class never changes it.
+ * MongoDB), and reads them back right after a page registration. The schema belongs to the legacy app (Hibernate):
+ * this class never changes it.
  *
  * Ids come from Hibernate's Member_SEQ table, shared with the legacy app: the row is locked and moved forward in
  * one transaction, so the legacy app and this class never hand out the same id. Never use max(id) + 1: the legacy
@@ -27,6 +30,14 @@ public class LegacyMemberPersistence {
 	// Same comparison as the legacy check and unique key (MySQL utf8mb4_0900_ai_ci: case- and accent-insensitive)
 	public boolean existsByEmail(String email) {
 		return jdbcClient.sql("SELECT COUNT(*) FROM Member WHERE email = ?").param(email).query(Long.class).single() > 0;
+	}
+
+	// Same query and order as the legacy member list (ORDER BY name with utf8mb4_0900_ai_ci: case- and accent-insensitive)
+	public List<Member> findAllOrderedByName() {
+		return jdbcClient.sql("SELECT id, name, email, phone_number FROM Member ORDER BY name")
+			.query((row, number) -> new Member(row.getLong("id"), row.getString("name"), row.getString("email"),
+					row.getString("phone_number")))
+			.list();
 	}
 
 	/**

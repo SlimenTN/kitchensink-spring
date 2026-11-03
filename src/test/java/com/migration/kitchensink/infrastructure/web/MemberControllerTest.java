@@ -27,7 +27,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -108,14 +107,17 @@ class MemberControllerTest {
 	void validMemberIsRegisteredAndTheFormIsEmptied() throws Exception {
 		NewMember jane = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
 		given(memberService.register(jane, Locale.ENGLISH)).willReturn(JANE);
+		// MongoDB does not have Jane yet (CDC); the write store does
+		given(memberService.findAllOrderedByName()).willReturn(List.of(JOHN));
+		given(memberService.findAllOrderedByNameIncludingNewRegistrations()).willReturn(List.of(JANE, JOHN));
 
 		Document page = page(form("Jane Doe", "jane.doe@example.com", "2125551234"), "en");
 
 		assertThat(page.select("ul.messages li.valid").text()).isEqualTo("Registered!");
 		assertThat(formValues(page)).containsExactly("", "", "");
-		// the returned page lists the new member, like legacy: wait for CDC to copy it to MongoDB
-		then(memberService).should().awaitReadable(7L, MemberController.NEW_MEMBER_VISIBLE_TIMEOUT);
-		assertThat(page.select("table.simpletablestyle tbody").text()).contains("jane.doe@example.com");
+		// the returned page lists the new member right away, like legacy
+		assertThat(page.select("table.simpletablestyle tbody td:nth-child(3)").eachText())
+			.containsExactly("jane.doe@example.com", "john.smith@mailinator.com");
 	}
 
 	@Test
@@ -141,7 +143,7 @@ class MemberControllerTest {
 		assertThat(fieldError(page, "email")).isEmpty();
 		assertThat(fieldError(page, "phoneNumber")).isEqualTo("size must be between 10 and 12");
 		assertThat(page.select("ul.messages")).isEmpty();
-		then(memberService).should(never()).awaitReadable(anyLong(), any());
+		then(memberService).should(never()).findAllOrderedByNameIncludingNewRegistrations();
 	}
 
 	// empty fields are sent as "" (like JSF), not missing: the legacy messages are about sizes, not nulls

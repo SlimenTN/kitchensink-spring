@@ -80,6 +80,16 @@ class LegacyMemberPersistenceTest {
 		assertThat(legacyMemberPersistence.existsByEmail("nobody@example.com")).isFalse();
 	}
 
+	// like the legacy list: by name, ignoring case and accents (MySQL collation)
+	@Test
+	void findAllOrderedByNameReturnsEveryMemberSortedLikeLegacy() {
+		legacyMemberPersistence.insert(new NewMember(null, "émile Zola", "emile@example.com", "2125551235"));
+		legacyMemberPersistence.insert(new NewMember(null, "alice Martin", "alice@example.com", "2125551236"));
+
+		assertThat(legacyMemberPersistence.findAllOrderedByName()).extracting(Member::name)
+			.containsExactly("alice Martin", "émile Zola", "John Smith");
+	}
+
 	private long nextVal() {
 		return jdbcClient.sql("SELECT next_val FROM Member_SEQ").query(Long.class).single();
 	}

@@ -15,7 +15,8 @@ import org.springframework.stereotype.Component;
 /**
  * The single persistence entry point of the domain: it decides which database is used.
  *
- * Reads and CDC synchronization always use MongoDB (memberRepository). Registrations (create, email check) go to
+ * Reads and CDC synchronization use MongoDB (memberRepository), except the read right after a page registration
+ * (findAllOrderedByNameFromWriteStore). Registrations (create, email check) go to
  * the database selected by migration.write-store: "legacy" = the legacy MySQL database, source of truth during the
  * migration (CDC copies new members to MongoDB); "new" = MongoDB, once all write traffic is on the new system (ids from
  * MemberIdSequence: biggest id + 1, case- and accent-insensitive unique email like MySQL).
@@ -58,6 +59,18 @@ public class MemberPersistence {
 	// Sorted like the legacy list: by name, ignoring case and accents
 	public List<Member> findAllOrderedByName() {
 		return memberRepository.findAllByOrderByNameAsc().stream().map(MemberPersistence::toMember).toList();
+	}
+
+	/**
+	 * Read-your-writes: all members as the write store has them, including a registration made just now (with "legacy",
+	 * CDC copies it to MongoDB only about a second later). The only read that does not always use MongoDB; used for the
+	 * page returned after a registration, like the legacy page.
+	 */
+	public List<Member> findAllOrderedByNameAfterRegistration() {
+		if (LEGACY.equals(writeStore)) {
+			return legacyRepository.findAllOrderedByName();
+		}
+		return findAllOrderedByName();
 	}
 
 	// Checked in the database that receives new members
