@@ -1,7 +1,6 @@
 package com.migration.kitchensink.domaine.services;
 
 import java.lang.annotation.Annotation;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -37,8 +36,6 @@ public class MemberService {
 	private static final MessageInterpolator MESSAGES = Validation.byDefaultProvider()
 		.configure()
 		.getDefaultMessageInterpolator();
-
-	private static final Duration READABLE_POLL_INTERVAL = Duration.ofMillis(100);
 
 	/**
 	 * The rules in the order they are written on NewMember (and on the legacy Member entity). Bean Validation reports
@@ -97,28 +94,6 @@ public class MemberService {
 	}
 
 	/**
-	 * Waits until a member just registered can be read (CDC copies it from the legacy database to MongoDB ~1 s
-	 * later), so a page can show it right away like the legacy page does.
-	 * @return false if it is still not readable after the timeout
-	 */
-	public boolean awaitReadable(long id, Duration timeout) {
-		long deadline = System.nanoTime() + timeout.toNanos();
-		while (memberPersistence.findById(id).isEmpty()) {
-			if (System.nanoTime() >= deadline) {
-				return false;
-			}
-			try {
-				Thread.sleep(READABLE_POLL_INTERVAL.toMillis());
-			}
-			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				return false;
-			}
-		}
-		return true;
-	}
-
-	/**
 	 * @throws MemberNotFoundException when no member has this id
 	 */
 	public Member findById(long id) {
@@ -130,6 +105,14 @@ public class MemberService {
 	 */
 	public List<Member> findAllOrderedByName() {
 		return memberPersistence.findAllOrderedByName();
+	}
+
+	/**
+	 * All members, sorted like {@link #findAllOrderedByName()}, read from the database that receives registrations:
+	 * includes a member registered just now.
+	 */
+	public List<Member> findAllOrderedByNameIncludingNewRegistrations() {
+		return memberPersistence.findAllOrderedByNameAfterRegistration();
 	}
 
 	/**

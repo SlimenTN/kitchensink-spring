@@ -1,6 +1,6 @@
 package com.migration.kitchensink.infrastructure.web;
 
-import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -26,9 +26,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 public class MemberController {
 
-	// like legacy, the page returned after a registration lists the new member: wait for CDC to copy it to MongoDB
-	static final Duration NEW_MEMBER_VISIBLE_TIMEOUT = Duration.ofSeconds(2);
-
 	// legacy has no email check before saving: its page shows the MySQL duplicate-key error as is (kept during the
 	// migration); the key name is the one Hibernate generated for the unique email constraint
 	static final String DUPLICATE_EMAIL_ERROR = "Duplicate entry '%s' for key 'Member.UK9qv6yhjqm8iafto8qk452gx8h'";
@@ -43,7 +40,7 @@ public class MemberController {
 
 	@GetMapping("/index.jsf")
 	public String page(Model model) {
-		return render(model, RegistrationForm.empty(), Map.of(), false, "");
+		return render(model, RegistrationForm.empty(), Map.of(), false, "", memberService.findAllOrderedByName());
 	}
 
 	// legacy-rendered forms also send jakarta.faces.ViewState and other hidden fields: ignored
@@ -53,25 +50,27 @@ public class MemberController {
 			@RequestParam(name = "reg:phoneNumber", defaultValue = "") String phoneNumber, Locale locale, Model model) {
 		RegistrationForm form = new RegistrationForm(name, email, phoneNumber);
 		try {
-			Member member = memberService.register(new NewMember(null, name, email, phoneNumber), locale);
-			memberService.awaitReadable(member.id(), NEW_MEMBER_VISIBLE_TIMEOUT);
-			return render(model, RegistrationForm.empty(), Map.of(), true, "");
+			memberService.register(new NewMember(null, name, email, phoneNumber), locale);
+			// like legacy, the returned page lists the new member: read from the database that just stored it
+			return render(model, RegistrationForm.empty(), Map.of(), true, "",
+					memberService.findAllOrderedByNameIncludingNewRegistrations());
 		}
 		catch (MemberValidationException exception) {
-			return render(model, form, exception.violations(), false, "");
+			return render(model, form, exception.violations(), false, "", memberService.findAllOrderedByName());
 		}
 		catch (EmailAlreadyTakenException exception) {
-			return render(model, form, Map.of(), false, DUPLICATE_EMAIL_ERROR.formatted(email));
+			return render(model, form, Map.of(), false, DUPLICATE_EMAIL_ERROR.formatted(email),
+					memberService.findAllOrderedByName());
 		}
 	}
 
 	private String render(Model model, RegistrationForm form, Map<String, String> fieldErrors, boolean registered,
-			String errorMessage) {
+			String errorMessage, List<Member> members) {
 		model.addAttribute("form", form);
 		model.addAttribute("fieldErrors", fieldErrors);
 		model.addAttribute("registered", registered);
 		model.addAttribute("errorMessage", errorMessage);
-		model.addAttribute("members", memberService.findAllOrderedByName().stream().map(MemberRow::from).toList());
+		model.addAttribute("members", members.stream().map(MemberRow::from).toList());
 		return PAGE;
 	}
 

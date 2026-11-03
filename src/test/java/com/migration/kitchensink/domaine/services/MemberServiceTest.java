@@ -1,6 +1,5 @@
 package com.migration.kitchensink.domaine.services;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -33,7 +32,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTest {
@@ -183,21 +181,11 @@ class MemberServiceTest {
 	}
 
 	@Test
-	void awaitReadableReturnsOnceCdcHasCopiedTheMember() {
+	void membersIncludingNewRegistrationsComeFromTheWriteStore() {
 		Member jane = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
-		given(memberPersistence.findById(201L)).willReturn(Optional.empty(), Optional.empty(), Optional.of(jane));
+		given(memberPersistence.findAllOrderedByNameAfterRegistration()).willReturn(List.of(jane));
 
-		assertThat(memberService.awaitReadable(201L, Duration.ofSeconds(5))).isTrue();
-		then(memberPersistence).should(times(3)).findById(201L);
-	}
-
-	@Test
-	void awaitReadableGivesUpAfterTheTimeout() {
-		given(memberPersistence.findById(201L)).willReturn(Optional.empty());
-		long start = System.nanoTime();
-
-		assertThat(memberService.awaitReadable(201L, Duration.ofMillis(300))).isFalse();
-		assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
+		assertThat(memberService.findAllOrderedByNameIncludingNewRegistrations()).containsExactly(jane);
 	}
 
 	@Test

@@ -79,6 +79,25 @@ class MemberPersistenceTest {
 	}
 
 	@Test
+	void legacyWriteStoreReadsTheMembersAfterARegistrationFromTheLegacyDatabase() {
+		Member jane = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
+		given(legacyRepository.findAllOrderedByName()).willReturn(List.of(jane));
+
+		assertThat(memberPersistence.findAllOrderedByNameAfterRegistration()).containsExactly(jane);
+		then(memberRepository).shouldHaveNoInteractions();
+	}
+
+	@Test
+	void newWriteStoreReadsTheMembersAfterARegistrationFromMongoDb() {
+		given(memberRepository.findAllByOrderByNameAsc())
+			.willReturn(List.of(new MemberDocument(1_000_007L, "Jane Doe", "jane.doe@example.com", "2125551234")));
+
+		assertThat(onNewWriteStore().findAllOrderedByNameAfterRegistration())
+			.containsExactly(new Member(1_000_007L, "Jane Doe", "jane.doe@example.com", "2125551234"));
+		then(legacyRepository).shouldHaveNoInteractions();
+	}
+
+	@Test
 	void newWriteStoreChecksTheEmailInMongoDb() {
 		given(memberRepository.existsByEmail("john.smith@mailinator.com")).willReturn(true);
 
