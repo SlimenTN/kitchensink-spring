@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
 import org.junit.jupiter.api.BeforeEach;
@@ -131,13 +132,15 @@ class MemberPersistenceTest {
 				writeStore);
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
+		List<MemberChange> changes = List.of(
+				new MemberChange.Upsert(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234")),
+				new MemberChange.Removal(2L));
+
 		persistence.findById(1L);
-		persistence.synchronize(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234"));
-		persistence.deleteById(1L);
+		persistence.synchronize(changes);
 
 		then(memberRepository).should().findById(1L);
-		then(memberRepository).should().save(new MemberDocument(1L, "Jane Doe", "jane.doe@example.com", "2125551234"));
-		then(memberRepository).should().deleteById(1L);
+		then(memberRepository).should().synchronize(changes);
 		then(legacyRepository).shouldHaveNoInteractions();
 	}
 
@@ -173,21 +176,6 @@ class MemberPersistenceTest {
 		given(memberRepository.findAllByOrderByNameAsc()).willReturn(List.of());
 
 		assertThat(memberPersistence.findAllOrderedByName()).isEmpty();
-	}
-
-	@Test
-	void synchronizeMapsTheDomainMemberToADocument() {
-		memberPersistence.synchronize(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234"));
-
-		then(memberRepository).should()
-			.save(new MemberDocument(1L, "Jane Doe", "jane.doe@example.com", "2125551234"));
-	}
-
-	@Test
-	void deleteByIdDeletesTheDocument() {
-		memberPersistence.deleteById(1L);
-
-		then(memberRepository).should().deleteById(1L);
 	}
 
 }

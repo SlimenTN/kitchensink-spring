@@ -1,6 +1,11 @@
 package com.migration.kitchensink.infrastructure.cdc;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.services.MemberService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 import org.springframework.stereotype.Component;
 
 /**
- * Applies one Debezium change event of the legacy Member table to the domain.
+ * Applies Debezium change events of the legacy Member table to the domain, one batch at a time.
  *
  * Event value (JSON, without schema):
  * {"before": {...} | null, "after": {...} | null, "op": "c" | "u" | "d" | "r"}
@@ -31,19 +36,33 @@ public class MemberChangeHandler {
 	}
 
 	/**
-	 * @param eventValue the change event value; {@code null} for tombstones, which are ignored
+	 * Applies a batch of change events, in their order, with one write to the domain.
+	 * @param eventValues the change event values; {@code null} for tombstones, which are ignored
 	 */
-	public void handle(String eventValue) {
+	public void handle(List<String> eventValues) {
+		List<MemberChange> changes = new ArrayList<>(eventValues.size());
+		for (String eventValue : eventValues) {
+			toChange(eventValue).ifPresent(changes::add);
+		}
+		if (!changes.isEmpty()) {
+			memberService.synchronize(changes);
+		}
+	}
+
+	private Optional<MemberChange> toChange(String eventValue) {
 		if (eventValue == null) {
-			return;
+			return Optional.empty();
 		}
 		JsonNode event = jsonMapper.readTree(eventValue);
 		String op = event.path("op").asString();
-		switch (op) {
-			case "c", "u", "r" -> memberService.synchronize(toMember(event.path("after")));
-			case "d" -> memberService.remove(event.path("before").path("id").asLong());
-			default -> log.warn("Ignoring Member change event with unsupported operation '{}'", op);
-		}
+		return switch (op) {
+			case "c", "u", "r" -> Optional.of(new MemberChange.Upsert(toMember(event.path("after"))));
+			case "d" -> Optional.of(new MemberChange.Removal(event.path("before").path("id").asLong()));
+			default -> {
+				log.warn("Ignoring Member change event with unsupported operation '{}'", op);
+				yield Optional.empty();
+			}
+		};
 	}
 
 	private static Member toMember(JsonNode row) {

@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
 
@@ -107,18 +108,9 @@ public class MemberPersistence {
 		return toMember(document);
 	}
 
-	// CDC: stores the member as it exists in the legacy database (upsert by _id); always MongoDB
-	public void synchronize(Member member) {
-		memberRepository.save(toDocument(member));
-	}
-
-	// CDC: always MongoDB
-	public void deleteById(long id) {
-		memberRepository.deleteById(id);
-	}
-
-	private static MemberDocument toDocument(Member member) {
-		return new MemberDocument(member.id(), member.name(), member.email(), member.phoneNumber());
+	// CDC: applies a batch of legacy changes in order, in one bulk write; always MongoDB
+	public void synchronize(List<MemberChange> changes) {
+		memberRepository.synchronize(changes);
 	}
 
 	private static Member toMember(MemberDocument document) {

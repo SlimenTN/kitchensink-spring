@@ -12,6 +12,7 @@ import com.migration.kitchensink.domaine.exceptions.MemberIdNotAllowedException;
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import jakarta.validation.ConstraintViolation;
@@ -116,17 +117,10 @@ public class MemberService {
 	}
 
 	/**
-	 * Stores the member as it exists in the legacy system (created, updated or snapshotted).
+	 * Applies changes of the legacy system (created, updated, snapshotted or deleted members), in their order.
 	 */
-	public void synchronize(Member member) {
-		memberPersistence.synchronize(member);
-	}
-
-	/**
-	 * Removes a member deleted from the legacy system; unknown ids are ignored.
-	 */
-	public void remove(long id) {
-		memberPersistence.deleteById(id);
+	public void synchronize(List<MemberChange> changes) {
+		memberPersistence.synchronize(changes);
 	}
 
 	private static int rank(ConstraintViolation<?> violation) {

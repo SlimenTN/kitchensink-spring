@@ -10,6 +10,7 @@ import com.migration.kitchensink.domaine.exceptions.MemberIdNotAllowedException;
 import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
+import com.migration.kitchensink.domaine.models.MemberChange;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import jakarta.validation.Validation;
@@ -221,19 +222,14 @@ class MemberServiceTest {
 	}
 
 	@Test
-	void synchronizeStoresTheMember() {
-		Member member = new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234");
+	void synchronizeAppliesTheLegacyChanges() {
+		List<MemberChange> changes = List.of(
+				new MemberChange.Upsert(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234")),
+				new MemberChange.Removal(2L));
 
-		memberService.synchronize(member);
+		memberService.synchronize(changes);
 
-		then(memberPersistence).should().synchronize(member);
-	}
-
-	@Test
-	void removeDeletesTheMember() {
-		memberService.remove(1L);
-
-		then(memberPersistence).should().deleteById(1L);
+		then(memberPersistence).should().synchronize(changes);
 	}
 
 }

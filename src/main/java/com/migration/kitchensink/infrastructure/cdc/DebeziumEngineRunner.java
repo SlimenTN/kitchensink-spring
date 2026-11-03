@@ -22,7 +22,7 @@ import org.springframework.context.SmartLifecycle;
  * Runs the embedded Debezium engine with the application: streams the legacy MySQL Member table
  * (initial snapshot, then binlog) to {@link MemberChangeHandler}.
  *
- * An event is marked as processed only after the handler succeeded, so a failed write is retried
+ * A batch is marked as processed only after the handler wrote it, so a failed write is retried
  * on the next start instead of being skipped.
  */
 public class DebeziumEngineRunner implements SmartLifecycle {
@@ -87,10 +87,12 @@ public class DebeziumEngineRunner implements SmartLifecycle {
 		return running;
 	}
 
-	private void handleBatch(List<ChangeEvent<String, String>> records,
+	private void handleBatch(
+			List<ChangeEvent<String, String>> records,
 			RecordCommitter<ChangeEvent<String, String>> committer) throws InterruptedException {
+		// one bulk write per batch; marked processed only once it is written
+		memberChangeHandler.handle(records.stream().map(ChangeEvent::value).toList());
 		for (ChangeEvent<String, String> record : records) {
-			memberChangeHandler.handle(record.value());
 			committer.markProcessed(record);
 		}
 		committer.markBatchFinished();
@@ -111,8 +113,10 @@ public class DebeziumEngineRunner implements SmartLifecycle {
 		config.setProperty("database.include.list", mysql.database());
 		config.setProperty("table.include.list", mysql.database() + "." + mysql.table());
 
-		// first start copies existing rows, then the binlog is streamed; no global read lock on the shared server
-		config.setProperty("snapshot.mode", "initial");
+		// first start copies existing rows, then the binlog is streamed; no global read lock on the shared server.
+		// when_needed: also copies them again if the saved binlog position no longer exists (binlog purged while the
+		// app was down, or corrupted) instead of stopping; replaying is safe, every write is an upsert/delete by _id
+		config.setProperty("snapshot.mode", "when_needed");
 		config.setProperty("snapshot.locking.mode", "none");
 
 		// binlog position and table structure survive restarts
