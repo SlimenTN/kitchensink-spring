@@ -6,7 +6,7 @@ import java.util.Optional;
 
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.infrastructure.database.MemberChange;
-import com.migration.kitchensink.infrastructure.database.MemberPersistence;
+import com.migration.kitchensink.infrastructure.database.DatabasePersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -27,12 +27,12 @@ public class MemberChangeHandler {
 
 	private static final Logger log = LoggerFactory.getLogger(MemberChangeHandler.class);
 
-	private final MemberPersistence memberPersistence;
+	private final DatabasePersistence databasePersistence;
 
 	private final JsonMapper jsonMapper;
 
-	public MemberChangeHandler(MemberPersistence memberPersistence, JsonMapper jsonMapper) {
-		this.memberPersistence = memberPersistence;
+	public MemberChangeHandler(DatabasePersistence databasePersistence, JsonMapper jsonMapper) {
+		this.databasePersistence = databasePersistence;
 		this.jsonMapper = jsonMapper;
 	}
 
@@ -46,7 +46,7 @@ public class MemberChangeHandler {
 			toChange(eventValue).ifPresent(changes::add);
 		}
 		if (!changes.isEmpty()) {
-			memberPersistence.synchronize(changes);
+			databasePersistence.synchronize(changes);
 		}
 	}
 

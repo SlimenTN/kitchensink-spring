@@ -11,7 +11,6 @@ import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
-import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,21 +39,21 @@ class MemberServiceTest {
 	private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
 
 	@Mock
-	private MemberPersistence memberPersistence;
+	private Store store;
 
 	private MemberService memberService;
 
 	@BeforeEach
 	void setUp() {
-		memberService = new MemberService(memberPersistence, VALIDATOR);
+		memberService = new MemberService(store, VALIDATOR);
 	}
 
 	@Test
 	void registerCreatesAValidMemberThroughThePersistenceAndReturnsIt() {
 		NewMember jane = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
 		Member stored = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
-		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
-		given(memberPersistence.create(jane)).willReturn(stored);
+		given(store.existsByEmail("jane.doe@example.com")).willReturn(false);
+		given(store.create(jane)).willReturn(stored);
 
 		assertThat(memberService.register(jane)).isEqualTo(stored);
 	}
@@ -65,7 +64,7 @@ class MemberServiceTest {
 			String message) {
 		assertThatThrownBy(() -> memberService.register(member)).isInstanceOfSatisfying(MemberValidationException.class,
 				exception -> assertThat(exception.violations()).containsExactly(entry(field, message)));
-		then(memberPersistence).shouldHaveNoInteractions();
+		then(store).shouldHaveNoInteractions();
 	}
 
 	static Stream<Arguments> invalidMembers() {
@@ -92,21 +91,21 @@ class MemberServiceTest {
 
 	@Test
 	void registerRejectsAnEmailAlreadyTaken() {
-		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+		given(store.existsByEmail("john.smith@mailinator.com")).willReturn(true);
 
 		assertThatThrownBy(() -> memberService
 			.register(new NewMember(null, "Someone Else", "john.smith@mailinator.com", "2125551234")))
 			.isInstanceOf(EmailAlreadyTakenException.class);
-		then(memberPersistence).should(never()).create(any());
+		then(store).should(never()).create(any());
 	}
 
 	@Test
 	void registerRejectsAMemberThatAlreadyHasAnId() {
-		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
+		given(store.existsByEmail("jane.doe@example.com")).willReturn(false);
 
 		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Jane Doe", "jane.doe@example.com", "2125551234")))
 			.isInstanceOf(MemberIdNotAllowedException.class);
-		then(memberPersistence).should(never()).create(any());
+		then(store).should(never()).create(any());
 	}
 
 	// legacy order: field rules, then email uniqueness, then the id
@@ -114,12 +113,12 @@ class MemberServiceTest {
 	void fieldRulesAreCheckedBeforeEmailUniquenessAndId() {
 		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Bad 123", "john.smith@mailinator.com", "2125551234")))
 			.isInstanceOf(MemberValidationException.class);
-		then(memberPersistence).shouldHaveNoInteractions();
+		then(store).shouldHaveNoInteractions();
 	}
 
 	@Test
 	void emailUniquenessIsCheckedBeforeTheId() {
-		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+		given(store.existsByEmail("john.smith@mailinator.com")).willReturn(true);
 
 		assertThatThrownBy(() -> memberService.register(new NewMember(999L, "Someone Else", "john.smith@mailinator.com", "2125551234")))
 			.isInstanceOf(EmailAlreadyTakenException.class);
@@ -136,27 +135,27 @@ class MemberServiceTest {
 							entry("name", "ne doit contenir que des lettres et des espaces"),
 							entry("email", "doit être une adresse électronique syntaxiquement correcte"),
 							entry("phoneNumber", "la taille doit être comprise entre 10 et 12")));
-		then(memberPersistence).shouldHaveNoInteractions();
+		then(store).shouldHaveNoInteractions();
 	}
 
 	@Test
 	void registerWithALanguageStoresAValidMemberLikeRegister() {
 		NewMember jane = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
 		Member stored = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
-		given(memberPersistence.existsByEmail("jane.doe@example.com")).willReturn(false);
-		given(memberPersistence.create(jane)).willReturn(stored);
+		given(store.existsByEmail("jane.doe@example.com")).willReturn(false);
+		given(store.create(jane)).willReturn(stored);
 
 		assertThat(memberService.register(jane, Locale.FRENCH)).isEqualTo(stored);
 	}
 
 	@Test
 	void registerWithALanguageRejectsAnEmailAlreadyTaken() {
-		given(memberPersistence.existsByEmail("john.smith@mailinator.com")).willReturn(true);
+		given(store.existsByEmail("john.smith@mailinator.com")).willReturn(true);
 
 		assertThatThrownBy(() -> memberService
 			.register(new NewMember(null, "Someone Else", "john.smith@mailinator.com", "2125551234"), Locale.FRENCH))
 			.isInstanceOf(EmailAlreadyTakenException.class);
-		then(memberPersistence).should(never()).create(any());
+		then(store).should(never()).create(any());
 	}
 
 	/**
@@ -181,7 +180,7 @@ class MemberServiceTest {
 	@Test
 	void membersIncludingNewRegistrationsComeFromTheWriteStore() {
 		Member jane = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
-		given(memberPersistence.findAllOrderedByNameAfterRegistration()).willReturn(List.of(jane));
+		given(store.findAllOrderedByNameAfterRegistration()).willReturn(List.of(jane));
 
 		assertThat(memberService.findAllOrderedByNameIncludingNewRegistrations()).containsExactly(jane);
 	}
@@ -189,14 +188,14 @@ class MemberServiceTest {
 	@Test
 	void findByIdReturnsTheMember() {
 		Member member = new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234");
-		given(memberPersistence.findById(1L)).willReturn(Optional.of(member));
+		given(store.findById(1L)).willReturn(Optional.of(member));
 
 		assertThat(memberService.findById(1L)).isEqualTo(member);
 	}
 
 	@Test
 	void findByIdThrowsMemberNotFoundExceptionForUnknownId() {
-		given(memberPersistence.findById(99L)).willReturn(Optional.empty());
+		given(store.findById(99L)).willReturn(Optional.empty());
 
 		assertThatThrownBy(() -> memberService.findById(99L)).isInstanceOf(MemberNotFoundException.class)
 			.hasMessageContaining("99");
@@ -206,14 +205,14 @@ class MemberServiceTest {
 	void findAllOrderedByNameReturnsTheMembersInPersistenceOrder() {
 		List<Member> members = List.of(new Member(2L, "alice", "alice@example.com", "2125550001"),
 				new Member(1L, "Bob", "bob@example.com", "2125550002"));
-		given(memberPersistence.findAllOrderedByName()).willReturn(members);
+		given(store.findAllOrderedByName()).willReturn(members);
 
 		assertThat(memberService.findAllOrderedByName()).containsExactlyElementsOf(members);
 	}
 
 	@Test
 	void findAllOrderedByNameReturnsAnEmptyListWhenThereAreNoMembers() {
-		given(memberPersistence.findAllOrderedByName()).willReturn(List.of());
+		given(store.findAllOrderedByName()).willReturn(List.of());
 
 		assertThat(memberService.findAllOrderedByName()).isEmpty();
 	}

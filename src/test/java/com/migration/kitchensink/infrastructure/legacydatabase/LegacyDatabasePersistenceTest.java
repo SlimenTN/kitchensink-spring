@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // Real MySQL with the legacy schema: the Member_SEQ protocol only means something with real transactions and locks
 @SpringBootTest(properties = "migration.cdc.enabled=false")
 @Import({ LegacyMySqlTestcontainersConfiguration.class, TestcontainersConfiguration.class })
-class LegacyMemberPersistenceTest {
+class LegacyDatabasePersistenceTest {
 
 	@Autowired
 	private LegacyMemberPersistence legacyMemberPersistence;
@@ -67,7 +67,7 @@ class LegacyMemberPersistenceTest {
 				.insert(new NewMember(null, "Member", "member" + i + "@example.com", "2125551234")))
 			.toList();
 
-		List<Long> ids = pool.invokeAll(inserts).stream().map(LegacyMemberPersistenceTest::idOf).toList();
+		List<Long> ids = pool.invokeAll(inserts).stream().map(LegacyDatabasePersistenceTest::idOf).toList();
 		pool.shutdown();
 
 		assertThat(ids).doesNotHaveDuplicates().allSatisfy(id -> assertThat(id).isBetween(151L, 170L));

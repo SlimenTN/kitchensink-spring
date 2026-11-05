@@ -5,7 +5,7 @@ import java.util.List;
 
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.infrastructure.database.MemberChange;
-import com.migration.kitchensink.infrastructure.database.MemberPersistence;
+import com.migration.kitchensink.infrastructure.database.DatabasePersistence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,13 +31,13 @@ class MemberChangeHandlerTest {
 			{"id": 2, "email": "john@example.com", "name": "John Smith", "phone_number": "2125551212"}""";
 
 	@Mock
-	private MemberPersistence memberPersistence;
+	private DatabasePersistence databasePersistence;
 
 	private MemberChangeHandler handler;
 
 	@BeforeEach
 	void setUp() {
-		handler = new MemberChangeHandler(memberPersistence, JsonMapper.builder().build());
+		handler = new MemberChangeHandler(databasePersistence, JsonMapper.builder().build());
 	}
 
 	// c = insert, r = row read during the initial snapshot
@@ -46,7 +46,7 @@ class MemberChangeHandlerTest {
 	void createdOrSnapshotRowIsSynchronized(String op) {
 		handler.handle(List.of(event(op, null, JANE)));
 
-		then(memberPersistence).should()
+		then(databasePersistence).should()
 			.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234")));
 	}
 
@@ -54,14 +54,14 @@ class MemberChangeHandlerTest {
 	void updatedRowIsSynchronizedWithItsNewValues() {
 		handler.handle(List.of(event("u", JANE, JANE_UPDATED)));
 
-		then(memberPersistence).should().synchronize(List.of(upsert(1L, "Jane Smith", "jane@example.org", "2125550000")));
+		then(databasePersistence).should().synchronize(List.of(upsert(1L, "Jane Smith", "jane@example.org", "2125550000")));
 	}
 
 	@Test
 	void deletedRowIsRemoved() {
 		handler.handle(List.of(event("d", JANE, null)));
 
-		then(memberPersistence).should().synchronize(List.of(new MemberChange.Removal(1L)));
+		then(databasePersistence).should().synchronize(List.of(new MemberChange.Removal(1L)));
 	}
 
 	// one write for the whole batch, in the binlog order
@@ -70,7 +70,7 @@ class MemberChangeHandlerTest {
 		handler.handle(List.of(event("r", null, JOHN), event("c", null, JANE), event("u", JANE, JANE_UPDATED),
 				event("d", JANE_UPDATED, null)));
 
-		then(memberPersistence).should()
+		then(databasePersistence).should()
 			.synchronize(List.of(upsert(2L, "John Smith", "john@example.com", "2125551212"),
 					upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234"),
 					upsert(1L, "Jane Smith", "jane@example.org", "2125550000"), new MemberChange.Removal(1L)));
@@ -80,7 +80,7 @@ class MemberChangeHandlerTest {
 	void tombstonesAndUnsupportedOperationsAreSkipped() {
 		handler.handle(Arrays.asList(null, event("t", null, null), event("c", null, JANE)));
 
-		then(memberPersistence).should()
+		then(databasePersistence).should()
 			.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234")));
 	}
 
@@ -88,7 +88,7 @@ class MemberChangeHandlerTest {
 	void aBatchWithNothingToApplyWritesNothing() {
 		handler.handle(Arrays.asList((String) null));
 
-		verifyNoInteractions(memberPersistence);
+		verifyNoInteractions(databasePersistence);
 	}
 
 	private static MemberChange upsert(long id, String name, String email, String phoneNumber) {

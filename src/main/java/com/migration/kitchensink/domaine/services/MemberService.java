@@ -13,7 +13,6 @@ import com.migration.kitchensink.domaine.exceptions.MemberNotFoundException;
 import com.migration.kitchensink.domaine.exceptions.MemberValidationException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
-import com.migration.kitchensink.infrastructure.database.MemberPersistence;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.MessageInterpolator;
 import jakarta.validation.Validation;
@@ -45,15 +44,15 @@ public class MemberService {
 	private static final List<Class<? extends Annotation>> RULE_ORDER = List.of(NotNull.class, NotEmpty.class,
 			Size.class, Pattern.class, Email.class, Digits.class);
 
-	private final MemberPersistence memberPersistence;
+	private final com.migration.kitchensink.domaine.services.Store store;
 
 	private final Validator validator;
 
 	public MemberService(
-            final MemberPersistence memberPersistence,
+            final Store store,
 			final Validator validator) {
 
-		this.memberPersistence = memberPersistence;
+		this.store = store;
 		this.validator = validator;
 	}
 
@@ -84,27 +83,27 @@ public class MemberService {
 					MESSAGES.interpolate(violation.getMessageTemplate(), new ViolationContext(violation), locale)));
 			throw new MemberValidationException(messages);
 		}
-		if (memberPersistence.existsByEmail(member.email())) {
+		if (store.existsByEmail(member.email())) {
 			throw new EmailAlreadyTakenException(member.email());
 		}
 		if (member.id() != null) {
 			throw new MemberIdNotAllowedException(member.id());
 		}
-		return memberPersistence.create(member);
+		return store.create(member);
 	}
 
 	/**
 	 * @throws MemberNotFoundException when no member has this id
 	 */
 	public Member findById(long id) {
-		return memberPersistence.findById(id).orElseThrow(() -> new MemberNotFoundException(id));
+		return store.findById(id).orElseThrow(() -> new MemberNotFoundException(id));
 	}
 
 	/**
 	 * All members, sorted by name like the legacy list (case- and accent-insensitive).
 	 */
 	public List<Member> findAllOrderedByName() {
-		return memberPersistence.findAllOrderedByName();
+		return store.findAllOrderedByName();
 	}
 
 	/**
@@ -112,7 +111,7 @@ public class MemberService {
 	 * includes a member registered just now.
 	 */
 	public List<Member> findAllOrderedByNameIncludingNewRegistrations() {
-		return memberPersistence.findAllOrderedByNameAfterRegistration();
+		return store.findAllOrderedByNameAfterRegistration();
 	}
 
 	private static int rank(ConstraintViolation<?> violation) {

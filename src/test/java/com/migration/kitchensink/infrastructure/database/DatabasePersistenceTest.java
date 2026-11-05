@@ -24,7 +24,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 @ExtendWith(MockitoExtension.class)
-class MemberPersistenceTest {
+class DatabasePersistenceTest {
 
 	private static final NewMember JANE = new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234");
 
@@ -38,15 +38,15 @@ class MemberPersistenceTest {
 	private MemberIdSequence idSequence;
 
 	// write store "legacy", as configured during the migration
-	private MemberPersistence memberPersistence;
+	private DatabasePersistence databasePersistence;
 
 	@BeforeEach
 	void setUp() {
-		memberPersistence = new MemberPersistence(memberRepository, legacyRepository, idSequence, "legacy");
+		databasePersistence = new DatabasePersistence(memberRepository, legacyRepository, idSequence, "legacy");
 	}
 
-	private MemberPersistence onNewWriteStore() {
-		return new MemberPersistence(memberRepository, legacyRepository, idSequence, "new");
+	private DatabasePersistence onNewWriteStore() {
+		return new DatabasePersistence(memberRepository, legacyRepository, idSequence, "new");
 	}
 
 	@Test
@@ -54,7 +54,7 @@ class MemberPersistenceTest {
 		Member stored = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
 		given(legacyRepository.insert(JANE)).willReturn(stored);
 
-		assertThat(memberPersistence.create(JANE)).isEqualTo(stored);
+		assertThat(databasePersistence.create(JANE)).isEqualTo(stored);
 		then(memberRepository).shouldHaveNoInteractions();
 	}
 
@@ -62,7 +62,7 @@ class MemberPersistenceTest {
 	void legacyWriteStoreChecksTheEmailInTheLegacyDatabase() {
 		given(legacyRepository.existsByEmail("john.smith@mailinator.com")).willReturn(true);
 
-		assertThat(memberPersistence.existsByEmail("john.smith@mailinator.com")).isTrue();
+		assertThat(databasePersistence.existsByEmail("john.smith@mailinator.com")).isTrue();
 		then(memberRepository).shouldHaveNoInteractions();
 	}
 
@@ -83,7 +83,7 @@ class MemberPersistenceTest {
 		Member jane = new Member(201L, "Jane Doe", "jane.doe@example.com", "2125551234");
 		given(legacyRepository.findAllOrderedByName()).willReturn(List.of(jane));
 
-		assertThat(memberPersistence.findAllOrderedByNameAfterRegistration()).containsExactly(jane);
+		assertThat(databasePersistence.findAllOrderedByNameAfterRegistration()).containsExactly(jane);
 		then(memberRepository).shouldHaveNoInteractions();
 	}
 
@@ -117,7 +117,7 @@ class MemberPersistenceTest {
 
 	@Test
 	void unknownWriteStoreIsRejectedAtStartup() {
-		assertThatThrownBy(() -> new MemberPersistence(memberRepository, legacyRepository, idSequence, "legasy"))
+		assertThatThrownBy(() -> new DatabasePersistence(memberRepository, legacyRepository, idSequence, "legasy"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("'legacy' or 'new'")
 			.hasMessageContaining("legasy");
@@ -127,7 +127,7 @@ class MemberPersistenceTest {
 	@ParameterizedTest
 	@ValueSource(strings = { "legacy", "new" })
 	void readsAndSynchronizationAlwaysUseMongoDb(String writeStore) {
-		MemberPersistence persistence = new MemberPersistence(memberRepository, legacyRepository, idSequence,
+		DatabasePersistence persistence = new DatabasePersistence(memberRepository, legacyRepository, idSequence,
 				writeStore);
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
 
@@ -148,7 +148,7 @@ class MemberPersistenceTest {
 		given(memberRepository.findById(1L))
 			.willReturn(Optional.of(new MemberDocument(1L, "Jane Doe", "jane.doe@example.com", "2125551234")));
 
-		assertThat(memberPersistence.findById(1L))
+		assertThat(databasePersistence.findById(1L))
 			.contains(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234"));
 	}
 
@@ -156,7 +156,7 @@ class MemberPersistenceTest {
 	void findByIdReturnsEmptyWhenNoDocument() {
 		given(memberRepository.findById(99L)).willReturn(Optional.empty());
 
-		assertThat(memberPersistence.findById(99L)).isEmpty();
+		assertThat(databasePersistence.findById(99L)).isEmpty();
 	}
 
 	@Test
@@ -165,7 +165,7 @@ class MemberPersistenceTest {
 			.willReturn(List.of(new MemberDocument(2L, "alice", "alice@example.com", "2125550001"),
 					new MemberDocument(1L, "Bob", "bob@example.com", "2125550002")));
 
-		assertThat(memberPersistence.findAllOrderedByName()).containsExactly(
+		assertThat(databasePersistence.findAllOrderedByName()).containsExactly(
 				new Member(2L, "alice", "alice@example.com", "2125550001"),
 				new Member(1L, "Bob", "bob@example.com", "2125550002"));
 	}
@@ -174,7 +174,7 @@ class MemberPersistenceTest {
 	void findAllOrderedByNameReturnsAnEmptyListWhenNoDocument() {
 		given(memberRepository.findAllByOrderByNameAsc()).willReturn(List.of());
 
-		assertThat(memberPersistence.findAllOrderedByName()).isEmpty();
+		assertThat(databasePersistence.findAllOrderedByName()).isEmpty();
 	}
 
 }

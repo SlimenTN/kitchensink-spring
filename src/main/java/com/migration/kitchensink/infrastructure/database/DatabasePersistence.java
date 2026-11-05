@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
+import com.migration.kitchensink.domaine.services.Store;
 import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Component;
  * MemberIdSequence: biggest id + 1, case- and accent-insensitive unique email like MySQL).
  */
 @Component
-public class MemberPersistence {
+public class DatabasePersistence implements Store {
 
 	static final String LEGACY = "legacy";
 
@@ -36,7 +37,7 @@ public class MemberPersistence {
 
 	private final String writeStore;
 
-	public MemberPersistence(
+	public DatabasePersistence(
 			final MemberRepository memberRepository,
 			final LegacyMemberPersistence legacyRepository,
 			final MemberIdSequence idSequence,
@@ -53,12 +54,12 @@ public class MemberPersistence {
 	}
 
 	public Optional<Member> findById(long id) {
-		return memberRepository.findById(id).map(MemberPersistence::toMember);
+		return memberRepository.findById(id).map(DatabasePersistence::toMember);
 	}
 
 	// Sorted like the legacy list: by name, ignoring case and accents
 	public List<Member> findAllOrderedByName() {
-		return memberRepository.findAllByOrderByNameAsc().stream().map(MemberPersistence::toMember).toList();
+		return memberRepository.findAllByOrderByNameAsc().stream().map(DatabasePersistence::toMember).toList();
 	}
 
 	/**
