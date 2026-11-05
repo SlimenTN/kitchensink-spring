@@ -44,7 +44,7 @@ public class MemberService {
 	private static final List<Class<? extends Annotation>> RULE_ORDER = List.of(NotNull.class, NotEmpty.class,
 			Size.class, Pattern.class, Email.class, Digits.class);
 
-	private final com.migration.kitchensink.domaine.services.Store store;
+	private final Store store;
 
 	private final Validator validator;
 
