@@ -12,16 +12,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.BulkOperations;
+import org.springframework.data.mongodb.core.BulkOperations.BulkMode;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.inOrder;
+import static org.springframework.data.mongodb.core.query.Criteria.where;
 
 @ExtendWith(MockitoExtension.class)
 class DatabasePersistenceTest {
@@ -37,16 +45,22 @@ class DatabasePersistenceTest {
 	@Mock
 	private MemberIdSequence idSequence;
 
+	@Mock
+	private MongoTemplate mongoTemplate;
+
+	@Mock
+	private BulkOperations bulk;
+
 	// write store "legacy", as configured during the migration
 	private DatabasePersistence databasePersistence;
 
 	@BeforeEach
 	void setUp() {
-		databasePersistence = new DatabasePersistence(memberRepository, legacyRepository, idSequence, "legacy");
+		databasePersistence = new DatabasePersistence(memberRepository, legacyRepository, idSequence, mongoTemplate, "legacy");
 	}
 
 	private DatabasePersistence onNewWriteStore() {
-		return new DatabasePersistence(memberRepository, legacyRepository, idSequence, "new");
+		return new DatabasePersistence(memberRepository, legacyRepository, idSequence, mongoTemplate, "new");
 	}
 
 	@Test
@@ -117,7 +131,7 @@ class DatabasePersistenceTest {
 
 	@Test
 	void unknownWriteStoreIsRejectedAtStartup() {
-		assertThatThrownBy(() -> new DatabasePersistence(memberRepository, legacyRepository, idSequence, "legasy"))
+		assertThatThrownBy(() -> new DatabasePersistence(memberRepository, legacyRepository, idSequence, mongoTemplate, "legasy"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessageContaining("'legacy' or 'new'")
 			.hasMessageContaining("legasy");
@@ -128,8 +142,9 @@ class DatabasePersistenceTest {
 	@ValueSource(strings = { "legacy", "new" })
 	void readsAndSynchronizationAlwaysUseMongoDb(String writeStore) {
 		DatabasePersistence persistence = new DatabasePersistence(memberRepository, legacyRepository, idSequence,
-				writeStore);
+				mongoTemplate, writeStore);
 		given(memberRepository.findById(1L)).willReturn(Optional.empty());
+		given(mongoTemplate.bulkOps(BulkMode.ORDERED, MemberDocument.class)).willReturn(bulk);
 
 		List<MemberChange> changes = List.of(
 				new MemberChange.Upsert(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234")),
@@ -139,8 +154,32 @@ class DatabasePersistenceTest {
 		persistence.synchronize(changes);
 
 		then(memberRepository).should().findById(1L);
-		then(memberRepository).should().synchronize(changes);
+		then(bulk).should().execute();
 		then(legacyRepository).shouldHaveNoInteractions();
+	}
+
+	// one ordered bulk write, the changes in their order
+	@Test
+	void synchronizeAppliesTheChangesInOrderInOneBulkWrite() {
+		given(mongoTemplate.bulkOps(BulkMode.ORDERED, MemberDocument.class)).willReturn(bulk);
+
+		databasePersistence.synchronize(List.of(
+				new MemberChange.Upsert(new Member(1L, "Jane Doe", "jane.doe@example.com", "2125551234")),
+				new MemberChange.Removal(2L)));
+
+		InOrder inOrder = inOrder(bulk);
+		then(bulk).should(inOrder).upsert(Query.query(where("_id").is(1L)), Update.update("name", "Jane Doe")
+			.set("email", "jane.doe@example.com")
+			.set("phoneNumber", "2125551234"));
+		then(bulk).should(inOrder).remove(Query.query(where("_id").is(2L)));
+		then(bulk).should(inOrder).execute();
+	}
+
+	@Test
+	void synchronizeAnEmptyBatchWritesNothing() {
+		databasePersistence.synchronize(List.of());
+
+		then(mongoTemplate).shouldHaveNoInteractions();
 	}
 
 	@Test

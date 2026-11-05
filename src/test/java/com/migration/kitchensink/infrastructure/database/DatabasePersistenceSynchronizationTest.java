@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 // The CDC bulk write against a real MongoDB
 @SpringBootTest(properties = "migration.cdc.enabled=false")
 @Import(TestcontainersConfiguration.class)
-class MemberSynchronizationTest {
+class DatabasePersistenceSynchronizationTest {
 
 	@Autowired
-	private MemberRepository memberRepository;
+	private DatabasePersistence databasePersistence;
 
 	@Autowired
 	private MongoTemplate mongoTemplate;
@@ -36,8 +36,8 @@ class MemberSynchronizationTest {
 
 	@Test
 	void upsertsCreateAndReplaceMembersWithExactlyTheMemberFields() {
-		memberRepository.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234")));
-		memberRepository.synchronize(List.of(upsert(1L, "Jane Smith", "jane@example.org", "2125550000")));
+		databasePersistence.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234")));
+		databasePersistence.synchronize(List.of(upsert(1L, "Jane Smith", "jane@example.org", "2125550000")));
 
 		// no _class or other field: the collection validator accepts only the member fields
 		assertThat(stored(1L)).isEqualTo(new Document("_id", 1L).append("name", "Jane Smith")
@@ -47,7 +47,7 @@ class MemberSynchronizationTest {
 
 	@Test
 	void changesAreAppliedInTheirOrder() {
-		memberRepository.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234"),
+		databasePersistence.synchronize(List.of(upsert(1L, "Jane Doe", "jane.doe@example.com", "2125551234"),
 				new MemberChange.Removal(1L), upsert(2L, "John Smith", "john@example.com", "2125551212"),
 				upsert(2L, "John Smyth", "john@example.com", "2125551212")));
 
@@ -57,14 +57,14 @@ class MemberSynchronizationTest {
 
 	@Test
 	void removingAnUnknownMemberIsIgnored() {
-		memberRepository.synchronize(List.of(new MemberChange.Removal(99L)));
+		databasePersistence.synchronize(List.of(new MemberChange.Removal(99L)));
 
 		assertThat(mongoTemplate.getCollection("members").countDocuments()).isZero();
 	}
 
 	@Test
 	void anEmptyBatchWritesNothing() {
-		memberRepository.synchronize(List.of());
+		databasePersistence.synchronize(List.of());
 
 		assertThat(mongoTemplate.getCollection("members").countDocuments()).isZero();
 	}
@@ -76,7 +76,7 @@ class MemberSynchronizationTest {
 		LongStream.rangeClosed(1, 5_000)
 			.forEach(id -> snapshot.add(upsert(id, "Member", "member" + id + "@example.com", "2125551234")));
 
-		memberRepository.synchronize(snapshot);
+		databasePersistence.synchronize(snapshot);
 
 		assertThat(mongoTemplate.getCollection("members").countDocuments()).isEqualTo(5_000);
 	}

@@ -11,7 +11,14 @@ import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersi
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.BulkOperations;
+import org.springframework.data.mongodb.core.BulkOperations.BulkMode;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
+
+import static org.springframework.data.mongodb.core.query.Criteria.where;
 
 /**
  * The single persistence entry point of the domain: it decides which database is used.
@@ -35,12 +42,15 @@ public class DatabasePersistence implements Store {
 
 	private final MemberIdSequence idSequence;
 
+	private final MongoTemplate mongoTemplate;
+
 	private final String writeStore;
 
 	public DatabasePersistence(
 			final MemberRepository memberRepository,
 			final LegacyMemberPersistence legacyRepository,
 			final MemberIdSequence idSequence,
+			final MongoTemplate mongoTemplate,
 			final @Value("${migration.write-store}") String writeStore) {
 
 		if (!LEGACY.equals(writeStore) && !NEW.equals(writeStore)) {
@@ -50,6 +60,7 @@ public class DatabasePersistence implements Store {
 		this.memberRepository = memberRepository;
 		this.legacyRepository = legacyRepository;
 		this.idSequence = idSequence;
+		this.mongoTemplate = mongoTemplate;
 		this.writeStore = writeStore;
 	}
 
@@ -108,9 +119,34 @@ public class DatabasePersistence implements Store {
 		return toMember(document);
 	}
 
-	// CDC: applies a batch of legacy changes in order, in one bulk write; always MongoDB
+	/**
+	 * CDC: applies a batch of legacy changes to MongoDB (always), in one bulk write: upsert by _id, delete by _id
+	 * (unknown ids are ignored). One round trip per Debezium batch instead of one per member.
+	 *
+	 * ORDERED: the changes are applied in the binlog order, so two changes of the same row (or a delete then an insert
+	 * reusing an email) end like in legacy. If a write fails, the rest of the batch is not applied; the batch is not
+	 * marked processed either, so CDC sends it again on the next start (upserts and deletes by _id can be replayed).
+	 */
 	public void synchronize(List<MemberChange> changes) {
-		memberRepository.synchronize(changes);
+		if (changes.isEmpty()) {
+			return; // MongoDB rejects an empty bulk write
+		}
+		BulkOperations bulk = mongoTemplate.bulkOps(BulkMode.ORDERED, MemberDocument.class);
+		for (MemberChange change : changes) {
+			switch (change) {
+				// every field is set: same result as replacing the whole document
+				case MemberChange.Upsert(Member member) -> bulk.upsert(byId(member.id()),
+						Update.update("name", member.name())
+							.set("email", member.email())
+							.set("phoneNumber", member.phoneNumber()));
+				case MemberChange.Removal(long id) -> bulk.remove(byId(id));
+			}
+		}
+		bulk.execute();
+	}
+
+	private static Query byId(long id) {
+		return Query.query(where("_id").is(id));
 	}
 
 	private static Member toMember(MemberDocument document) {
