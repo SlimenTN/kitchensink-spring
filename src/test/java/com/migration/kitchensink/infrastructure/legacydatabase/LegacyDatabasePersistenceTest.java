@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LegacyDatabasePersistenceTest {
 
 	@Autowired
-	private LegacyMemberPersistence legacyMemberPersistence;
+	private LegacyDatabasePersistence legacyDatabasePersistence;
 
 	@Autowired
 	private JdbcClient jdbcClient;
@@ -40,7 +40,7 @@ class LegacyDatabasePersistenceTest {
 
 	@Test
 	void insertStoresTheMemberWithTheNextIdOfMemberSeq() {
-		Member stored = legacyMemberPersistence.insert(new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234"));
+		Member stored = legacyDatabasePersistence.insert(new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234"));
 
 		assertThat(stored).isEqualTo(new Member(151L, "Jane Doe", "jane.doe@example.com", "2125551234"));
 		assertThat(row(151L)).isEqualTo(new Member(151L, "Jane Doe", "jane.doe@example.com", "2125551234"));
@@ -54,7 +54,7 @@ class LegacyDatabasePersistenceTest {
 		long legacyBlockStart = nextVal();
 		jdbcClient.sql("UPDATE Member_SEQ SET next_val = next_val + 50").update(); // legacy reserves 151..200
 
-		Member stored = legacyMemberPersistence.insert(new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234"));
+		Member stored = legacyDatabasePersistence.insert(new NewMember(null, "Jane Doe", "jane.doe@example.com", "2125551234"));
 
 		assertThat(stored.id()).isEqualTo(201L).isGreaterThan(legacyBlockStart + 49);
 	}
@@ -63,7 +63,7 @@ class LegacyDatabasePersistenceTest {
 	void concurrentInsertsGetDistinctIds() throws Exception {
 		ExecutorService pool = Executors.newFixedThreadPool(8);
 		List<Callable<Member>> inserts = IntStream.range(0, 20)
-			.<Callable<Member>>mapToObj(i -> () -> legacyMemberPersistence
+			.<Callable<Member>>mapToObj(i -> () -> legacyDatabasePersistence
 				.insert(new NewMember(null, "Member", "member" + i + "@example.com", "2125551234")))
 			.toList();
 
@@ -76,17 +76,17 @@ class LegacyDatabasePersistenceTest {
 
 	@Test
 	void existsByEmailFindsAnExistingMember() {
-		assertThat(legacyMemberPersistence.existsByEmail("john.smith@mailinator.com")).isTrue();
-		assertThat(legacyMemberPersistence.existsByEmail("nobody@example.com")).isFalse();
+		assertThat(legacyDatabasePersistence.existsByEmail("john.smith@mailinator.com")).isTrue();
+		assertThat(legacyDatabasePersistence.existsByEmail("nobody@example.com")).isFalse();
 	}
 
 	// like the legacy list: by name, ignoring case and accents (MySQL collation)
 	@Test
 	void findAllOrderedByNameReturnsEveryMemberSortedLikeLegacy() {
-		legacyMemberPersistence.insert(new NewMember(null, "émile Zola", "emile@example.com", "2125551235"));
-		legacyMemberPersistence.insert(new NewMember(null, "alice Martin", "alice@example.com", "2125551236"));
+		legacyDatabasePersistence.insert(new NewMember(null, "émile Zola", "emile@example.com", "2125551235"));
+		legacyDatabasePersistence.insert(new NewMember(null, "alice Martin", "alice@example.com", "2125551236"));
 
-		assertThat(legacyMemberPersistence.findAllOrderedByName()).extracting(Member::name)
+		assertThat(legacyDatabasePersistence.findAllOrderedByName()).extracting(Member::name)
 			.containsExactly("alice Martin", "émile Zola", "John Smith");
 	}
 

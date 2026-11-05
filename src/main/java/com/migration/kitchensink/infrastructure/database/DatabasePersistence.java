@@ -7,7 +7,7 @@ import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
 import com.migration.kitchensink.domaine.services.Store;
-import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
+import com.migration.kitchensink.infrastructure.legacydatabase.LegacyDatabasePersistence;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -38,7 +38,7 @@ public class DatabasePersistence implements Store {
 
 	private final MemberRepository memberRepository;
 
-	private final LegacyMemberPersistence legacyRepository;
+	private final LegacyDatabasePersistence legacyRepository;
 
 	private final MemberIdSequence idSequence;
 
@@ -48,7 +48,7 @@ public class DatabasePersistence implements Store {
 
 	public DatabasePersistence(
 			final MemberRepository memberRepository,
-			final LegacyMemberPersistence legacyRepository,
+			final LegacyDatabasePersistence legacyRepository,
 			final MemberIdSequence idSequence,
 			final MongoTemplate mongoTemplate,
 			final @Value("${migration.write-store}") String writeStore) {

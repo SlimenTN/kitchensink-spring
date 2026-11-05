@@ -19,11 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
  * app hands out ids from blocks it reserved in memory.
  */
 @Component
-public class LegacyMemberPersistence {
+public class LegacyDatabasePersistence {
 
 	private final JdbcClient jdbcClient;
 
-	public LegacyMemberPersistence(JdbcClient jdbcClient) {
+	public LegacyDatabasePersistence(JdbcClient jdbcClient) {
 		this.jdbcClient = jdbcClient;
 	}
 

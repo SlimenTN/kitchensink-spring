@@ -6,7 +6,7 @@ import java.util.Optional;
 import com.migration.kitchensink.domaine.exceptions.EmailAlreadyTakenException;
 import com.migration.kitchensink.domaine.models.Member;
 import com.migration.kitchensink.domaine.models.NewMember;
-import com.migration.kitchensink.infrastructure.legacydatabase.LegacyMemberPersistence;
+import com.migration.kitchensink.infrastructure.legacydatabase.LegacyDatabasePersistence;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +40,7 @@ class DatabasePersistenceTest {
 	private MemberRepository memberRepository;
 
 	@Mock
-	private LegacyMemberPersistence legacyRepository;
+	private LegacyDatabasePersistence legacyRepository;
 
 	@Mock
 	private MemberIdSequence idSequence;
